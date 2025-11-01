@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flask File Organizer</title>
+    <style>
+        /* Basic CSS for a clean look */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .flash {
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        .flash.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .flash.warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .flash.error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        
+        .action-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+        }
+        .action-form input[type="file"], .action-form input[type="text"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            flex-grow: 1;
+        }
+        .action-form button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .file-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .file-table th, .file-table td {
+            border: 1px solid #eee;
+            padding: 10px;
+            text-align: left;
+        }
+        .file-table th {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        .file-table td a {
+            text-decoration: none;
+            color: #007bff;
+        }
+        .file-table button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .breadcrumb a {
+            text-decoration: none;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>☁️ Flask File Manager</h1>
+        <p>Serving files from: <strong>/{{ upload_folder }}</strong></p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <p class="breadcrumb">
+            <a href="{{ url_for('index') }}">Home</a> / 
+            {% set path_parts = current_dir.split('/') if current_dir else [] %}
+            {% set current_url = '' %}
+            {% for part in path_parts %}
+                {% set current_url = current_url + part + '/' %}
+                <a href="{{ url_for('index', req_path=current_url) }}">{{ part }}</a> / 
+            {% endfor %}
+        </p>
+        
+        <hr>
+
+        <input type="hidden" name="current_path" value="{{ current_dir }}">
+
+        <h2>Actions in Current Folder</h2>
+        
+        <form class="action-form" method="POST" action="{{ url_for('upload_file') }}" enctype="multipart/form-data">
+            <input type="hidden" name="current_path" value="{{ current_dir }}">
+            <input type="file" name="file" required>
+            <button type="submit">⬆️ Upload File</button>
+        </form>
+
+        <form class="action-form" method="POST" action="{{ url_for('create_folder') }}">
+            <input type="hidden" name="current_path" value="{{ current_dir }}">
+            <input type="text" name="folder_name" placeholder="New folder name..." required>
+            <button type="submit">➕ Create Folder</button>
+        </form>
+
+        <hr>
+
+        <h2>📚 Folder Contents</h2>
+        <table class="file-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Name</th>
+                    <th>Size</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if current_dir %}
+                    <tr>
+                        <td>📁</td>
+                        <td>
+                            <a href="{{ url_for('index', req_path='/'.join(current_dir.split('/')[:-1])) }}">
+                                [..] Parent Directory
+                            </a>
+                        </td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                {% endif %}
+
+                {% for item in items %}
+                    <tr>
+                        <td>{{ '📁' if item.is_dir else '📄' }}</td>
+                        <td>
+                            <a href="{{ item.url }}">{{ item.name }}</a>
+                        </td>
+                        <td>
+                            {% if not item.is_dir %}
+                                {{ (item.size / 1024) | round(2) }} KB
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if not item.is_dir %}
+                                <a href="{{ url_for('download_file', filename=current_dir + '/' + item.name) }}">Download</a>
+                            {% endif %}
+                            
+                            <form method="POST" action="{{ url_for('delete_file', filename=current_dir + '/' + item.name) }}" style="display:inline; margin-left: 10px;">
+                                <button type="submit" onclick="return confirm('Are you sure you want to delete {{ item.name }}? This cannot be undone.');">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                {% else %}
+                    {% if not current_dir %}
+                        <tr><td colspan="4">Welcome! Upload a file or create a folder to get started.</td></tr>
+                    {% else %}
+                        <tr><td colspan="4">This folder is empty.</td></tr>
+                    {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

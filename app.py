@@ -1,5 +1,3 @@
-# app.py (FINAL WORKING VERSION)
-
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory, flash
 from werkzeug.utils import secure_filename
 import os
@@ -8,16 +6,16 @@ import shutil
 from datetime import datetime
 import time 
 
-# --- File Categorization Map ---
 FILE_CATEGORIES = {
     'Images': ('.png', '.jpg', '.jpeg', '.gif', '.svg'),
     'Documents': ('.pdf', '.docx', '.txt', '.pptx', '.xlsx'),
     'Videos': ('.mp4', '.mov', '.avi', '.mkv'),
     'Archives': ('.zip', '.rar', '.tar', '.gz'),
+    'Scripts': ('.py', '.js', '.html', '.css', '.yml', '.yaml'),
 }
 
 def get_category_folder(filename):
-    """Determines the category folder based on the file extension."""
+   
     if '.' in filename:
         extension = filename.rsplit('.', 1)[1].lower()
         for folder, extensions in FILE_CATEGORIES.items():
@@ -25,58 +23,52 @@ def get_category_folder(filename):
                 return folder
     return 'Others'
 
-# --- Configuration ---
+
 BASE_DIR = Path(os.path.abspath(os.path.dirname(__file__)))
 UPLOAD_PATH = BASE_DIR / 'uploads'
 
 # Added 'yaml'/'yml' based on previous request
-ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'zip', 'mp4', 'docx', 'xlsx', 'yml', 'yaml'}
+ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'zip', 'mp4', 'docx', 'xlsx', 'yml', 'yaml','py', 'pptx', 'mov', 'avi', 'mkv', 'rar', 'tar', 'gz', 'svg'}
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_PATH.name 
-app.secret_key = 'your_strong_secret_key_here_for_flash_messages' 
+app.secret_key = 'MGForever' 
 
 UPLOAD_PATH.mkdir(exist_ok=True)
 
-# --- Helper Functions ---
 def allowed_file(filename):
-    """Checks if a file extension is allowed."""
+    
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def human_readable_size(size, decimal_places=2):
-    """Converts bytes to human-readable format (KB, MB, GB)."""
+  
     for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if size < 1024.0:
             return f"{size:.{decimal_places}f} {unit}"
         size /= 1024.0
     return f"{size:.{decimal_places}f} TB"
 
-# --- Routes ---
-
 @app.route('/', defaults={'req_path': ''})
 @app.route('/<path:req_path>')
 def index(req_path):
-    """Renders the main page, handling file and directory browsing."""
     
     abs_path = UPLOAD_PATH / req_path
-    current_dir = req_path if req_path else '' # Defined early to prevent NameError
+    current_dir = req_path if req_path else '' 
     
-    # Security Check 1: Prevent going above the UPLOAD_PATH
+
     if not abs_path.resolve().is_relative_to(UPLOAD_PATH.resolve()):
         flash("Access Denied: Cannot access folders outside the main directory.", 'error')
         return redirect(url_for('index', req_path=current_dir))
 
-    # Check if path exists
+  
     if not abs_path.exists():
         flash(f"Error: Path '{req_path}' not found.", 'error')
         return redirect(url_for('index'))
 
-    # If the path is a file, redirect to the download route
     if abs_path.is_file():
         return redirect(url_for('download_file', filename=req_path))
 
-    # If it's a directory: list its contents
     if abs_path.is_dir():
         items = []
         try:
@@ -92,7 +84,6 @@ def index(req_path):
                     'modified_hr': datetime.fromtimestamp(stats.st_mtime).strftime('%Y-%m-%d %H:%M')
                 })
             
-            # Sort by directory first, then by name
             items.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
 
         except Exception as e:
@@ -108,12 +99,8 @@ def index(req_path):
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Handles multiple file uploads and automatically organizes them."""
-    
-    # CORRECTED: Uses 'file' to match the index.html input name
     uploaded_files = request.files.getlist('file') 
 
-    # Get path for redirecting back
     target_path = request.form.get('current_path', '') 
 
     if not uploaded_files or uploaded_files[0].filename == '':
@@ -125,19 +112,12 @@ def upload_file():
     for file in uploaded_files:
         if file.filename and allowed_file(file.filename):
             try:
-                # 1. Determine the destination folder 
-                destination_folder_name = get_category_folder(file.filename)
-                
-                # 2. Define the absolute path for the category folder
-                category_path = UPLOAD_PATH / destination_folder_name 
-                
-                # 3. Create the category folder if it doesn't exist
-                category_path.mkdir(exist_ok=True)
-                
-                # 4. Secure and save the file
-                filename = secure_filename(file.filename)
-                file.save(category_path / filename)
-                success_count += 1
+               destination_folder_name = get_category_folder(file.filename)
+               category_path = UPLOAD_PATH / destination_folder_name 
+               category_path.mkdir(exist_ok=True)
+               filename = secure_filename(file.filename)
+               file.save(category_path / filename)
+               success_count += 1
                 
             except Exception as e:
                 flash(f"Error uploading {file.filename}: {e}", 'error')
@@ -154,7 +134,6 @@ def upload_file():
 
 @app.route('/download/<path:filename>')
 def download_file(filename):
-    """Handles file downloads."""
     secure_name = secure_filename(Path(filename).name)
     directory = UPLOAD_PATH / Path(filename).parent
     
@@ -167,8 +146,6 @@ def download_file(filename):
 
 @app.route('/delete/<path:filename>', methods=['POST'])
 def delete_file(filename):
-    """Handles file or folder deletion."""
-    
     item_path = UPLOAD_PATH / filename
     parent_path = str(item_path.parent.relative_to(UPLOAD_PATH))
     if parent_path == '.': parent_path = ''
@@ -193,8 +170,6 @@ def delete_file(filename):
 
 @app.route('/create_folder', methods=['POST'])
 def create_folder():
-    """Handles creating a new folder."""
-    
     folder_name = request.form.get('folder_name')
     target_path = request.form.get('current_path', '')
     
@@ -220,6 +195,5 @@ def create_folder():
     return redirect(url_for('index', req_path=target_path))
 
 
-# --- Run the application ---
 if __name__ == '__main__':
     app.run(debug=True)
